@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard de Entregas</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        padding: 20px;
+        background-color: #f4f4f4;
+      }
+      .container {
+        max-width: 800px;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+      th,
+      td {
+        border: 1px solid #ddd;
+        padding: 10px;
+        text-align: left;
+      }
+      th {
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+      }
+      th:hover {
+        background-color: #0056b3;
+      }
+      .form-group {
+        margin-bottom: 10px;
+      }
+      input,
+      select,
+      button {
+        padding: 8px;
+        margin-top: 5px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+      }
+      button {
+        background: linear-gradient(45deg, #007bff, #0056b3);
+        color: white;
+        border: none;
+        cursor: pointer;
+        margin-right: 5px;
+        transition: background 0.3s ease;
+      }
+      button:hover {
+        background: linear-gradient(45deg, #0056b3, #003d80);
+      }
+      .notificacao {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 10px 20px;
+        border-radius: 5px;
+        color: white;
+        background-color: #28a745;
+        display: none;
+      }
+      .notificacao.erro {
+        background-color: #dc3545;
+      }
+      .paginacao {
+        margin-top: 20px;
+        text-align: center;
+      }
+      .paginacao button {
+        background-color: #6c757d;
+        margin: 0 5px;
+      }
+      .paginacao button.ativo {
+        background-color: #007bff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Dashboard de Entregas</h2>
+      <div class="form-group">
+        <label for="projeto">Nome do Projeto:</label>
+        <input
+          type="text"
+          id="projeto"
+          placeholder="Digite o nome do projeto"
+        />
+      </div>
+      <div class="form-group">
+        <label for="status">Status:</label>
+        <select id="status">
+          <option value="Pendente">Pendente</option>
+          <option value="Em andamento">Em andamento</option>
+          <option value="Concluído">Concluído</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="data">Data de Entrega:</label>
+        <input type="date" id="data" />
+      </div>
+      <button onclick="adicionarEntrega()">Adicionar Entrega</button>
+      <button onclick="exportarCSV()">Exportar CSV</button>
+      <input
+        type="file"
+        id="importarCSV"
+        accept=".csv"
+        onchange="importarCSV()"
+      />
+      <button onclick="limparLista()" style="background-color: red">
+        Limpar Lista
+      </button>
+
+      <div class="form-group">
+        <label for="filtro">Filtrar Entregas:</label>
+        <input
+          type="text"
+          id="filtro"
+          onkeyup="filtrarEntregas()"
+          placeholder="Digite para filtrar..."
+        />
+      </div>
+
+      <h3>Lista de Entregas</h3>
+      <table>
+        <thead>
+          <tr>
+            <th onclick="ordenarTabela(0)">Projeto</th>
+            <th onclick="ordenarTabela(1)">Status</th>
+            <th onclick="ordenarTabela(2)">Data</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tabela-entregas"></tbody>
+      </table>
+      <div class="paginacao" id="paginacao"></div>
+    </div>
+
+    <div id="notificacao" class="notificacao"></div>
+
+    <script>
+      let paginaAtual = 1;
+      const itensPorPagina = 10;
+
+      function adicionarEntrega() {
+        const projeto = document.getElementById("projeto").value;
+        const status = document.getElementById("status").value;
+        const data = document.getElementById("data").value;
+
+        if (projeto.trim() === "" || data.trim() === "") {
+          mostrarNotificacao("Preencha todos os campos!", "erro");
+          return;
+        }
+
+        const tabela = document.getElementById("tabela-entregas");
+        const novaLinha = tabela.insertRow();
+        novaLinha.insertCell(0).textContent = projeto;
+        novaLinha.insertCell(1).textContent = status;
+        novaLinha.insertCell(2).textContent = data;
+        const acoes = novaLinha.insertCell(3);
+        acoes.innerHTML =
+          '<button onclick="editarEntrega(this)">Editar</button> <button onclick="removerEntrega(this)" style="background-color: red;">Remover</button>';
+
+        salvarLocalStorage();
+        mostrarNotificacao("Entrega adicionada com sucesso!");
+        exibirPagina(paginaAtual);
+      }
+
+      function editarEntrega(botao) {
+        const linha = botao.parentNode.parentNode;
+        document.getElementById("projeto").value = linha.cells[0].textContent;
+        document.getElementById("status").value = linha.cells[1].textContent;
+        document.getElementById("data").value = linha.cells[2].textContent;
+        linha.remove();
+        salvarLocalStorage();
+        mostrarNotificacao("Entrega editada com sucesso!");
+      }
+
+      function removerEntrega(botao) {
+        if (confirm("Tem certeza que deseja remover esta entrega?")) {
+          botao.parentNode.parentNode.remove();
+          salvarLocalStorage();
+          mostrarNotificacao("Entrega removida com sucesso!");
+          exibirPagina(paginaAtual);
+        }
+      }
+
+      function salvarLocalStorage() {
+        const entregas = [];
+        document.querySelectorAll("#tabela-entregas tr").forEach((linha) => {
+          const colunas = linha.querySelectorAll("td");
+          if (colunas.length > 0) {
+            entregas.push({
+              projeto: colunas[0].textContent,
+              status: colunas[1].textContent,
+              data: colunas[2].textContent,
+            });
+          }
+        });
+        localStorage.setItem("entregas", JSON.stringify(entregas));
+      }
+
+      function carregarLocalStorage() {
+        const entregas = JSON.parse(localStorage.getItem("entregas")) || [];
+        entregas.forEach((entrega) => {
+          const tabela = document.getElementById("tabela-entregas");
+          const novaLinha = tabela.insertRow();
+          novaLinha.insertCell(0).textContent = entrega.projeto;
+          novaLinha.insertCell(1).textContent = entrega.status;
+          novaLinha.insertCell(2).textContent = entrega.data;
+          const acoes = novaLinha.insertCell(3);
+          acoes.innerHTML =
+            '<button onclick="editarEntrega(this)">Editar</button> <button onclick="removerEntrega(this)" style="background-color: red;">Remover</button>';
+        });
+        exibirPagina(paginaAtual);
+      }
+
+      function filtrarEntregas() {
+        const filtro = document.getElementById("filtro").value.toLowerCase();
+        document.querySelectorAll("#tabela-entregas tr").forEach((linha) => {
+          const projeto = linha.cells[0]?.textContent.toLowerCase() || "";
+          linha.style.display = projeto.includes(filtro) ? "" : "none";
+        });
+      }
+
+      function ordenarTabela(coluna) {
+        const tabela = document.getElementById("tabela-entregas");
+        const linhas = Array.from(tabela.querySelectorAll("tr"));
+        const cabecalho = linhas.shift(); // Remove o cabeçalho
+
+        linhas.sort((a, b) => {
+          const valorA = a.cells[coluna].textContent;
+          const valorB = b.cells[coluna].textContent;
+          return valorA.localeCompare(valorB);
+        });
+
+        tabela.innerHTML = "";
+        tabela.appendChild(cabecalho);
+        linhas.forEach((linha) => tabela.appendChild(linha));
+        exibirPagina(paginaAtual);
+      }
+
+      function exibirPagina(pagina) {
+        const linhas = document.querySelectorAll("#tabela-entregas tr");
+        linhas.forEach((linha, index) => {
+          if (
+            index === 0 ||
+            (index > (pagina - 1) * itensPorPagina &&
+              index <= pagina * itensPorPagina)
+          ) {
+            linha.style.display = "";
+          } else {
+            linha.style.display = "none";
+          }
+        });
+        atualizarPaginacao();
+      }
+
+      function atualizarPaginacao() {
+        const totalLinhas =
+          document.querySelectorAll("#tabela-entregas tr").length - 1;
+        const totalPaginas = Math.ceil(totalLinhas / itensPorPagina);
+        const paginacao = document.getElementById("paginacao");
+        paginacao.innerHTML = "";
+
+        for (let i = 1; i <= totalPaginas; i++) {
+          const botao = document.createElement("button");
+          botao.textContent = i;
+          botao.addEventListener("click", () => {
+            paginaAtual = i;
+            exibirPagina(paginaAtual);
+          });
+          if (i === paginaAtual) {
+            botao.classList.add("ativo");
+          }
+          paginacao.appendChild(botao);
+        }
+      }
+
+      function mostrarNotificacao(mensagem, tipo = "sucesso") {
+        const notificacao = document.getElementById("notificacao");
+        notificacao.textContent = mensagem;
+        notificacao.className = `notificacao ${tipo}`;
+        notificacao.style.display = "block";
+
+        setTimeout(() => {
+          notificacao.style.display = "none";
+        }, 3000);
+      }
+
+      function exportarCSV() {
+        const linhas = [];
+        const cabecalho = ["Projeto", "Status", "Data"];
+        linhas.push(cabecalho.join(","));
+
+        document.querySelectorAll("#tabela-entregas tr").forEach((linha) => {
+          const colunas = linha.querySelectorAll("td");
+          if (colunas.length > 0) {
+            const dados = [
+              colunas[0].textContent,
+              colunas[1].textContent,
+              colunas[2].textContent,
+            ];
+            linhas.push(dados.join(","));
+          }
+        });
+
+        const csvContent = "data:text/csv;charset=utf-8," + linhas.join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "entregas.csv");
+        document.body.appendChild(link);
+        link.click();
+      }
+
+      function importarCSV() {
+        const arquivo = document.getElementById("importarCSV").files[0];
+        if (!arquivo) return;
+
+        const leitor = new FileReader();
+        leitor.onload = function (e) {
+          const conteudo = e.target.result;
+          const linhas = conteudo.split("\n");
+          linhas.forEach((linha, index) => {
+            if (index === 0) return; // Ignora o cabeçalho
+            const [projeto, status, data] = linha.split(",");
+            if (projeto && status && data) {
+              const tabela = document.getElementById("tabela-entregas");
+              const novaLinha = tabela.insertRow();
+              novaLinha.insertCell(0).textContent = projeto;
+              novaLinha.insertCell(1).textContent = status;
+              novaLinha.insertCell(2).textContent = data;
+              const acoes = novaLinha.insertCell(3);
+              acoes.innerHTML =
+                '<button onclick="editarEntrega(this)">Editar</button> <button onclick="removerEntrega(this)" style="background-color: red;">Remover</button>';
+            }
+          });
+          salvarLocalStorage();
+          mostrarNotificacao("CSV importado com sucesso!");
+        };
+        leitor.readAsText(arquivo);
+      }
+
+      function limparLista() {
+        if (confirm("Tem certeza que deseja limpar a lista de entregas?")) {
+          document.getElementById("tabela-entregas").innerHTML = "";
+          localStorage.removeItem("entregas");
+          mostrarNotificacao("Lista de entregas limpa com sucesso!");
+        }
+      }
+
+      window.onload = carregarLocalStorage;
+    </script>
+  </body>
+</html>
